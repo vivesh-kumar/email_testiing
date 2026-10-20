@@ -1,4 +1,6 @@
+import os
 import smtplib
+import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
@@ -191,15 +193,83 @@ def generate_email_text(data: dict) -> str:
     return "\n".join(lines)
 
 
-def send_confirmation_email(recipient_email: str, data: dict) -> dict:
-    """
-    Send the confirmation email live via SMTP.
-    Returns status dict {success: bool, message: str}
-    """
-    subject = f"Confirmation: {data.get('task_name', 'Process')} Completed [{data.get('job_id', '')}]"
-    html_body = generate_email_html(data)
-    text_body = generate_email_text(data)
+def send_via_resend(recipient_email: str, subject: str, html_body: str, text_body: str) -> dict:
+    """Send via Resend HTTP API over Port 443 (HTTPS) - Works on Render Free Tier."""
+    from_addr = os.getenv("RESEND_FROM") or f"{Config.SENDER_NAME} <onboarding@resend.dev>"
+    headers = {
+        "Authorization": f"Bearer {Config.RESEND_API_KEY.strip()}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "from": from_addr,
+        "to": [recipient_email],
+        "subject": subject,
+        "html": html_body,
+        "text": text_body
+    }
+    try:
+        resp = requests.post("https://api.resend.com/emails", headers=headers, json=payload, timeout=12)
+        if resp.status_code in (200, 201):
+            print(f"[HTTP API] Successfully delivered via Resend to {recipient_email}")
+            return {
+                "success": True,
+                "message": f"Confirmation email successfully sent via Resend API to {recipient_email}."
+            }
+        else:
+            print(f"[ERROR] Resend API error: {resp.status_code} - {resp.text}")
+            return {
+                "success": False,
+                "error": resp.text,
+                "message": f"Resend API error ({resp.status_code}): {resp.text}"
+            }
+    except Exception as e:
+        print(f"[ERROR] HTTP request to Resend failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"HTTP request failed: {e}"
+        }
 
+
+def send_via_brevo(recipient_email: str, subject: str, html_body: str, text_body: str, data: dict) -> dict:
+    """Send via Brevo HTTP API over Port 443 (HTTPS) - Works on Render Free Tier."""
+    headers = {
+        "api-key": Config.BREVO_API_KEY.strip(),
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "sender": {"name": Config.SENDER_NAME, "email": Config.SENDER_EMAIL},
+        "to": [{"email": recipient_email, "name": data.get("recipient_name", "Valued User")}],
+        "subject": subject,
+        "htmlContent": html_body,
+        "textContent": text_body
+    }
+    try:
+        resp = requests.post("https://api.brevo.com/v3/smtp/email", headers=headers, json=payload, timeout=12)
+        if resp.status_code in (200, 201):
+            print(f"[HTTP API] Successfully delivered via Brevo to {recipient_email}")
+            return {
+                "success": True,
+                "message": f"Confirmation email successfully sent via Brevo API to {recipient_email}."
+            }
+        else:
+            print(f"[ERROR] Brevo API error: {resp.status_code} - {resp.text}")
+            return {
+                "success": False,
+                "error": resp.text,
+                "message": f"Brevo API error ({resp.status_code}): {resp.text}"
+            }
+    except Exception as e:
+        print(f"[ERROR] HTTP request to Brevo failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"HTTP request failed: {e}"
+        }
+
+
+def send_via_smtp(recipient_email: str, subject: str, html_body: str, text_body: str) -> dict:
+    """Send via traditional SMTP (port 587 / 465)."""
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -238,3 +308,25 @@ def send_confirmation_email(recipient_email: str, data: dict) -> dict:
             "error": str(exc),
             "message": f"SMTP delivery failed: {exc}"
         }
+
+
+def send_confirmation_email(recipient_email: str, data: dict) -> dict:
+    """
+    Send the confirmation email using HTTP REST API (port 443) or SMTP.
+    If RESEND_API_KEY or BREVO_API_KEY is configured, it sends via HTTPS (bypassing Render's SMTP block).
+    Otherwise, it sends via SMTP.
+    """
+    subject = f"Confirmation: {data.get('task_name', 'Process')} Completed [{data.get('job_id', '')}]"
+    html_body = generate_email_html(data)
+    text_body = generate_email_text(data)
+
+    # 1. Use Resend HTTP REST API if RESEND_API_KEY is present
+    if Config.RESEND_API_KEY:
+        return send_via_resend(recipient_email, subject, html_body, text_body)
+
+    # 2. Use Brevo HTTP REST API if BREVO_API_KEY is present
+    if Config.BREVO_API_KEY:
+        return send_via_brevo(recipient_email, subject, html_body, text_body, data)
+
+    # 3. Fallback to direct SMTP
+    return send_via_smtp(recipient_email, subject, html_body, text_body)

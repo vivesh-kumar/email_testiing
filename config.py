@@ -9,7 +9,11 @@ BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 class Config:
-    # Mail Server (supports both MAIL_* and SMTP_* naming conventions)
+    # HTTP REST Email API (Recommended for Render Free Tier - Bypasses SMTP Port Blocks over Port 443 HTTPS)
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
+
+    # Mail Server (supports both MAIL_* and SMTP_* naming conventions for SMTP fallback)
     SMTP_SERVER: str = os.getenv("MAIL_SERVER") or os.getenv("SMTP_SERVER", "smtp19.mycloudmailbox.com")
     SMTP_PORT: int = int(os.getenv("MAIL_PORT") or os.getenv("SMTP_PORT", 587))
     SMTP_USE_TLS: bool = (os.getenv("MAIL_USE_TLS") or os.getenv("SMTP_USE_TLS", "True")).strip().lower() in ("true", "1", "yes")

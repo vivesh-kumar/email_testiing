@@ -33,8 +33,10 @@ def index():
 
 @app.get("/api/config")
 def get_config_status():
+    mode = "HTTP API (Resend - Port 443)" if Config.RESEND_API_KEY else ("HTTP API (Brevo - Port 443)" if Config.BREVO_API_KEY else "SMTP Direct")
     return {
-        "status": "Live SMTP Active",
+        "status": mode,
+        "is_http_api": bool(Config.RESEND_API_KEY or Config.BREVO_API_KEY),
         "smtp_server": Config.SMTP_SERVER,
         "smtp_port": Config.SMTP_PORT,
         "sender_email": Config.SENDER_EMAIL,

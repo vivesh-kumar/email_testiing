@@ -51,8 +51,9 @@ def trigger_process(req: ProcessRequest):
         task_name=req.task_name,
         custom_details=req.details
     )
-    # Store rendered HTML in memory for live UI preview
-    RECENT_EMAILS[result["job_id"]] = generate_email_html(result)
+    email_html = generate_email_html(result)
+    RECENT_EMAILS[result["job_id"]] = email_html
+    result["html_preview"] = email_html
     return result
 
 @app.get("/api/preview/{job_id}", response_class=HTMLResponse)

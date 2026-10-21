@@ -225,7 +225,12 @@
                 // Load preview safely
                 const iframe = document.getElementById('email-frame');
                 if (iframe) {
-                    iframe.src = `/api/preview/${result.job_id}`;
+                    if (result.html_preview) {
+                        iframe.srcdoc = result.html_preview;
+                    } else {
+                        iframe.removeAttribute('srcdoc');
+                        iframe.src = `/api/preview/${result.job_id}`;
+                    }
                 }
                 const previewTag = document.getElementById('preview-tag');
                 if (previewTag) {
